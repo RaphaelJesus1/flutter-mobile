@@ -27,6 +27,7 @@ class GameForm extends StatefulWidget {
 class _GameFormState extends State<GameForm> {
   GameData _data = GameData.empty();
   int? _selectedOption = -1;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -35,28 +36,34 @@ class _GameFormState extends State<GameForm> {
   }
 
   void getAndSetData() async {
+    setState(() {
+      _isLoading = true;
+    });
     Future<Response> promise = http.get(Uri.parse(
         "https://7c2bad50.us-south.apigw.appdomain.cloud/api/guessColors"));
 
     GameData result = await promise.then((response) {
       final data = jsonDecode(response.body);
-      print(data);
       return GameData(data['r'], data['g'], data['b'], data['a'],
           data['correto'], new List<String>.from(data['opcoes']));
     });
 
     setState(() {
       _data = result;
+      _isLoading = false;
     });
   }
 
+  void resetGame() {
+    getAndSetData();
+  }
+
   Widget getOptions() {
-    return Column(children: new List<Widget>.from(
-      _data.options.map((option) {
-        int index = _data.options.indexOf(option);
-        return ListTile(
-          title: Text(option),
-          leading: Radio<int>(
+    return Column(children: new List<Widget>.from(_data.options.map((option) {
+      int index = _data.options.indexOf(option);
+      return ListTile(
+        title: Text(option),
+        leading: Radio<int>(
             value: index,
             groupValue: _selectedOption,
             onChanged: (int? value) {
@@ -64,20 +71,38 @@ class _GameFormState extends State<GameForm> {
                 _selectedOption = value;
               });
             }),
-        );
-      })   
-    ));
+      );
+    })));
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-        home: Scaffold(
-      appBar: AppBar(
-        title: const Text("Guess the Colors"),
-        centerTitle: true,
-      ),
-      body: Column(children: <Widget>[
+  void checkResult() {
+    String result = _selectedOption == _data.correct ? "Correct!" : "Incorrect";
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Your Guess Is...'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[Text(result)],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+                child: const Text('Get Next'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  resetGame();
+                }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget renderForm() {
+    return Column(children: <Widget>[
         Container(
             height: 150,
             color:
@@ -97,13 +122,27 @@ class _GameFormState extends State<GameForm> {
               ),
               Center(
                   child: ElevatedButton(
-                onPressed: () => print(_selectedOption),
+                onPressed: checkResult,
                 child: Text("Check your guess"),
               ))
             ],
           ),
         ))
-      ]),
+      ]
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+        home: Scaffold(
+      appBar: AppBar(
+        title: const Text("Guess the Colors"),
+        centerTitle: true,
+      ),
+      body: _isLoading
+        ? Center(child: new CircularProgressIndicator(),)
+        : renderForm()
     ));
   }
 }
